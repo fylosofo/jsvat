@@ -190,6 +190,11 @@ Version       V1.36
               30 December 2020
               Addition of Israeli VAT numbers, Australian ABN numbers and Brazilian CNPJ numbers
               
+Version       V1.37
+              6 August 2021
+              Addition of Brazilian CPF numbers and refinement of Brazilian CNPJ number check
+              Thanks to Alann Jaksnon Calado De Araujo.
+
 Parameters:    toCheck - VAT number be checked. 
 
 This function checks the value of the parameter for a valid European VAT number. 
@@ -229,7 +234,8 @@ function checkVATNumber(toCheck) {
   vatexp.push(/^(BA)(\d{13})$/);                           //** Bosnia and Herzegovina
   vatexp.push(/^(BE)(0?\d{9})$/);                          //** Belgium 
   vatexp.push(/^(BE)([0-1]\d{9})$/);                       //** Belgium - since 01/01/2020
-  vatexp.push(/^(BR|CNPJ)[:|\.]?\s?(\d{2}\.?\d{3}\.?\d{3}\.?\/?\d{4}-?\d{2})$/); //** Brazil CNPJ
+  vatexp.push(/^(BR|CNPJ)[:|\.]?\s?(\d{2}\.?\d{3}\.?\d{3}\.?\/?\d{4}-?\d{2})$/); //** Brazil (company)
+  vatexp.push(/^(BR|CPF)[:|\.]?\s?(\d{3}\.?\d{3}\.?\d{3}-?\d{2})$/); //** Brazil (personal)
   vatexp.push(/^(BG)(\d{9,10})$/);                         //** Bulgaria 
   vatexp.push(/^(CHE)(\d{9})(MWST|TVA|IVA)?$/);            //** Switzerland
   vatexp.push(/^(CY)([0-59]\d{7}[A-Z])$/);                 //** Cyprus
@@ -285,7 +291,6 @@ function checkVATNumber(toCheck) {
   vatexp.push(/^(UA)(\d{12})$/);                           //** Ukraine
   vatexp.push(/^(VA)(\d{11})$/);                           //** Vatican 
 
-
   // Load up the string to check, converting it top uppercase
   var VATNumber = toCheck.toUpperCase();
 
@@ -310,6 +315,7 @@ function checkVATNumber(toCheck) {
       switch (cCode.slice(0, 4)) {
         case "ABN": cCode = "AU"; break;                            // Australia
         case "CNPJ": cCode = "BR"; break;                           // Brazil
+        case "CPF": cCode = "BR"; break;                            // Brazil
         case "GR": cCode = "EL"; break;                             // Greece
         case "XI": cCode = "GB"; break;                             // Northern Ireland
         default: break;
@@ -506,34 +512,96 @@ function BGVATCheckDigit(vatnumber) {
 
 function BRVATCheckDigit(vatnumber) {
 
-  // Validates an Brazilian CNPJ number.
+  // There are two types of Brazilian numbers - CNPJ for commercial entities, and CPF for personal.
 
-  // Multipliers for a MOD 89 calculation
-  var multipliers = [2, 3, 4, 5, 6, 7, 8, 9, 2, 3, 4, 5, 6];
+  if (vatnumber.length == 14) {
 
-  // Calculate the total based on multiplying the first 12 digits by their equivalent multiplier  
-  var total = 0;
-  for (var i = 11; i > -1; i--) total += Number(vatnumber.charAt(i)) * multipliers[11 - i];
+    // Flag invalid CNPJ numbers that would otherwise pass the test
+    if (vatnumber == "00000000000000" ||
+      vatnumber == "11111111111111" ||
+      vatnumber == "22222222222222" ||
+      vatnumber == "33333333333333" ||
+      vatnumber == "44444444444444" ||
+      vatnumber == "55555555555555" ||
+      vatnumber == "66666666666666" ||
+      vatnumber == "77777777777777" ||
+      vatnumber == "88888888888888" ||
+      vatnumber == "99999999999999"
+    )
+      return false;
 
-  // Calculate the check digit for digit 13
-  var temp = total % 11;
-  if (temp == 0 || temp == 1) temp = 0; else temp = 11 - total % 11;
+    // Validates a Brazilian CNPJ number. 
+    // See https://www.cdq.ch/sites/default/files/CDQ_Data%20Quality%20Rule_for%20Brazil.pdf
 
-  // Return if not valid
-  if (temp != Number(vatnumber.charAt(12))) return false;
+    // Multipliers for a MOD 11 calculation
+    var multipliers = [2, 3, 4, 5, 6, 7, 8, 9, 2, 3, 4, 5, 6];
 
-  // Repeat but include the first (correct) check digit in position 13  
-  total = 0;
-  for (i = 12; i > -1; i--) total += Number(vatnumber.charAt(i)) * multipliers[12 - i];
+    // Calculate the total based on multiplying the first 12 digits by their equivalent multiplier  
+    var total = 0;
+    for (var i = 11; i > -1; i--) total += Number(vatnumber.charAt(i)) * multipliers[11 - i];
 
-  // Calculate the check digit for digit 14
-  temp = total % 11;
-  if (temp == 0 || temp == 1) temp = 0; else temp = 11 - total % 11;
+    // Calculate the check digit for digit 13
+    var temp = total % 11;
+    if (temp == 0 || temp == 1) temp = 0; else temp = 11 - total % 11;
 
-  if (temp != Number(vatnumber.charAt(13)))
-    return false;
-  else
+    // Return if not valid
+    if (temp != Number(vatnumber.charAt(12))) return false;
+
+    // Repeat but include the first (correct) check digit in position 13  
+    total = 0;
+    for (i = 12; i > -1; i--) total += Number(vatnumber.charAt(i)) * multipliers[12 - i];
+
+    // Calculate the check digit for digit 14
+    temp = total % 11;
+    if (temp == 0 || temp == 1) temp = 0; else temp = 11 - total % 11;
+
+    if (temp != Number(vatnumber.charAt(13)))
+      return false;
+    else
+      return true;
+  }
+
+  else {
+
+    // Validates a Brazilian CPF number. 
+
+    // Flag invalid CPF numbers that would otherwise pass the test
+    if (vatnumber == "00000000000" ||
+      vatnumber == "11111111111" ||
+      vatnumber == "22222222222" ||
+      vatnumber == "33333333333" ||
+      vatnumber == "44444444444" ||
+      vatnumber == "55555555555" ||
+      vatnumber == "66666666666" ||
+      vatnumber == "77777777777" ||
+      vatnumber == "88888888888" ||
+      vatnumber == "99999999999"
+    )
+      return false;
+
+    var total = 0;
+    for (i = 0; i < 9; i++) {
+      total += parseInt(vatnumber.charAt(i)) * (10 - i);
+    }
+
+    var remainder = 11 - (total % 11);
+    if (remainder == 10 || remainder == 11) remainder = 0;
+
+    if (remainder != parseInt(vatnumber.charAt(9))) return false;
+
+    total = 0;
+    for (i = 0; i < 10; i++) {
+      total += parseInt(vatnumber.charAt(i)) * (11 - i);
+    }
+    remainder = 11 - (total % 11);
+    if (remainder == 10 || remainder == 11) remainder = 0;
+
+    if (remainder != parseInt(vatnumber.charAt(10))) return false;
+
     return true;
+
+  }
+
 }
 
 function CHEVATCheckDigit(vatnumber) {
